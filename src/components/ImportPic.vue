@@ -10,6 +10,8 @@
 </template>
 
 <script>
+import { deltaE } from "chroma-js";
+
 export default {
   name: 'ImportPic',
   data() {
@@ -17,6 +19,9 @@ export default {
       imageWidth: 820,
       imageHeight: 1005
     }
+  },
+  mounted() {
+    console.log(deltaE)
   },
   methods: {
     loadFile(event) {

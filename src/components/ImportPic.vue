@@ -3,10 +3,20 @@
   <h1>Hi, Nano!</h1>
 
   <!-- input options -->
-  <div id="input-opts" class="mb-3">
+  <div id="input-opts" class="d-flex flex-wrap mb-3 align-items-center">
+    <!-- select file -->
     <input type="file" id="file" accept="image/*" @change="loadFile">
 
-    <b-button @click="matchColors" v-if="fileLoaded">Match colors</b-button>
+    <template v-if="fileLoaded">
+      <!-- number of colors -->
+      <div class="input-num-colors mr-5 d-flex align-items-center">
+        <label for="num-colors" class="flex-shrink-0 mr-2">Number of colors</label>
+        <b-form-input id="num-colors" v-model="numMatches" type="number" min="1" placeholder="Number of colors"></b-form-input>
+      </div>
+
+      <!-- execute -->
+      <b-button @click="matchColors">Match colors</b-button>
+    </template>
   </div>
 
   <!-- Progress bar -->
@@ -166,11 +176,12 @@ export default {
       return (closestColor)
     },
     matchColors() {
+      this.isMatching = true;
+
       const imgDMC = this.imagePixels.map((d, i) => {
-        this.isMatching = true;
         this.matchProgress = i / this.imagePixels.length;
 
-        if(i % 1000 === 0){
+        if (i % 1000 === 0) {
           console.log(this.matchProgress)
         }
 
@@ -210,5 +221,9 @@ export default {
 <style scoped lang="scss">
 td {
     padding: 0.25rem 0.5rem;
+}
+
+.input-num-colors {
+    width: 225px;
 }
 </style>

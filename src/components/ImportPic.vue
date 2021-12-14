@@ -196,7 +196,6 @@ export default {
         const rgba = d.id.split(",")
         obj["color"] = chroma(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]/255})`);
         const closest = this.calcDist(obj.color);
-        console.log(closest)
         obj["hex"] = obj.color.hex();
         obj["pixel_count"] = d.count;
         obj["closest_hex"] = closest.hex;

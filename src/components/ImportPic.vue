@@ -1,17 +1,68 @@
 <template>
-<div>
+<div class="m-5">
   <h1>Hi, Nano!</h1>
 
-  <input type="file" id="file" accept="image/*" @change="loadFile">
-  <div v-for="(color, idx) in matchedColors" :key="idx">
-    <template v-if="idx < maxNum">
-      {{color}}
-    </template>
+  <!-- input options -->
+  <div id="input-opts" class="mb-3">
+    <input type="file" id="file" accept="image/*" @change="loadFile">
 
+    <b-button @click="matchColors" v-if="fileLoaded">Match colors</b-button>
   </div>
-  <button @click="matchColors">Match colors</button>
 
-  <canvas id="canvas"></canvas>
+  <!-- Progress bar -->
+  <div class="w-100 m-auto">
+
+    <div class="d-flex flex-column arrange-items-center w-50" v-if="isMatching">
+      <small class="text-muted">Percent complete</small>
+      <b-progress :value="matchProgress" max="1" show-progress animated></b-progress>
+    </div>
+  </div>
+
+  <!-- image preview -->
+  <div id="image-preview">
+    <h6>original image</h6>
+    <canvas id="canvas"></canvas>
+  </div>
+
+
+  <!-- results -->
+  <div id="results" v-if="filteredMatches.length">
+    <table>
+      <thead>
+        <tr class="font-weight-bold text-left">
+          <td>
+
+          </td>
+          <td>
+            DMC code
+          </td>
+          <td>
+            name
+          </td>
+          <td>
+            Percent of image
+          </td>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr v-for="(color, idx) in filteredMatches" :key="idx" class="text-left">
+          <td :style="{width: '50px', height: '25px', background: color.dmc_hex, border: '4px solid white'}">
+          </td>
+          <td>
+            {{color.dmc_id}}
+          </td>
+          <td>
+            {{color.dmc_name}}
+          </td>
+          <td>
+            {{color.pct}}
+          </td>
+        </tr>
+      </tbody>
+
+    </table>
+  </div>
 
 </div>
 </template>
@@ -23,7 +74,10 @@ import {
 import chroma from 'chroma-js';
 import DMC from "@/assets/dmc_colors.json";
 import chunk from "lodash/chunk";
+import sumBy from "lodash/sumBy";
 import countBy from "lodash/countBy";
+import groupBy from "lodash/groupBy";
+import * as _ from "lodash";
 
 export default {
   name: 'ImportPic',
@@ -32,11 +86,17 @@ export default {
       imageWidth: 80,
       imageHeight: 80,
       matchedColors: [],
-      maxNum: 10,
+      matchProgress: 0,
+      isMatching: false,
+      fileLoaded: false,
+      numMatches: 10,
       roundedRGBA: [],
-      chunks: []
-      // imageWidth: 820,
-      // imageHeight: 1005
+      imagePixels: []
+    }
+  },
+  computed: {
+    filteredMatches() {
+      return (this.matchedColors.slice(0, this.numMatches))
     }
   },
   mounted() {
@@ -46,6 +106,49 @@ export default {
     })
   },
   methods: {
+    loadFile(event) {
+      // resetting the values on new file load.
+      this.isMatching = false;
+      this.matchProgress = 0;
+      this.matchedColors = [];
+      this.fileLoaded = false;
+
+      var canvas = document.getElementById('canvas'); // load context of canvas
+      var ctx = canvas.getContext('2d'); // load context of canvas
+      var img = new Image();
+      img.src = URL.createObjectURL(event.target.files[0]); // use first selected image from input element
+
+      img.onload = (e) => {
+        this.imageWidth = img.width * 0.5;
+        this.imageHeight = img.height * 0.5;
+        canvas.width = this.imageWidth;
+        canvas.height = this.imageHeight;
+
+        ctx.drawImage(img, 0, 0, this.imageWidth, this.imageHeight); // draw the image to the canvas
+        let imgData = ctx.getImageData(0, 0, this.imageWidth, this.imageHeight);
+
+        // split into RGBA values
+        let pixels = chunk(imgData.data, 4);
+
+        // round the RGB values to the nearest 5 units, to reduce the number of duplicate calculations to make.
+        this.roundedRGBA = pixels.map(d => this.roundRGBA(d));
+
+        // count the number of occurrences of RGBA values, to reduce to single values to compare.
+        let chunkCount = countBy(this.roundedRGBA);
+
+        // convert from an object to an array
+        this.imagePixels = Object.keys(chunkCount).map(key => ({
+          id: key,
+          count: chunkCount[key]
+        }));
+
+        // sort high to low
+        this.imagePixels.sort((a, b) => b.count - a.count);
+
+        // allow color matching to happen
+        this.fileLoaded = true;
+      }
+    },
     roundRGBA(arr) {
       return (`${this.round(arr[0])},${this.round(arr[1])},${this.round(arr[2])},${this.round(arr[3])/255}`)
     },
@@ -63,64 +166,41 @@ export default {
       return (closestColor)
     },
     matchColors() {
-      const imgDMC = this.chunks.map((d, i) => {
-        if (i % 1000 === 0) {
-          console.log(i / this.chunks.length)
+      const imgDMC = this.imagePixels.map((d, i) => {
+        this.isMatching = true;
+        this.matchProgress = i / this.imagePixels.length;
+
+        if(i % 1000 === 0){
+          console.log(this.matchProgress)
         }
+
         let obj = {};
         const rgba = d.id.split(",")
         obj["color"] = chroma(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]/255})`);
         const closest = this.calcDist(obj.color);
         obj["hex"] = obj.color.hex();
-        obj["color_count"] = d.count;
+        obj["pixel_count"] = d.count;
         obj["closest_hex"] = closest.hex;
         obj["closest_name"] = closest.name;
         obj["closest_dmc_id"] = closest.floss;
         return obj;
       })
 
-      const dmcObj = countBy(imgDMC, "closest_name");
-      this.matchedColors = Object.keys(dmcObj).map(key => ({
-        id: key,
-        count: dmcObj[key]
-      }));
+      // sum number of occurrences of the DMC color
+      this.matchedColors = _(imgDMC).groupBy("closest_dmc_id")
+        .map((values, i) => ({
+          values: values,
+          dmc_id: values[0]["closest_dmc_id"],
+          dmc_name: values[0]["closest_name"],
+          dmc_hex: values[0]["closest_hex"],
+          count: sumBy(values, "pixel_count"),
+          pct: Math.round(sumBy(values, "pixel_count") / this.roundedRGBA.length * 1000) / 10 + "%"
+        }))
+        .value()
+
+      // sort descendingly by count
       this.matchedColors.sort((a, b) => b.count - a.count);
-      // console.log(imgDMC)
       console.log(this.matchedColors)
-    },
-    loadFile(event) {
-      var canvas = document.getElementById('canvas'); // load context of canvas
-      var ctx = canvas.getContext('2d'); // load context of canvas
-      var img = new Image();
-      img.src = URL.createObjectURL(event.target.files[0]); // use first selected image from input element
-
-      img.onload = (e) => {
-        this.imageWidth = img.width;
-        this.imageHeight = img.height;
-        canvas.width = this.imageWidth;
-        canvas.height = this.imageHeight;
-
-        ctx.drawImage(img, 0, 0); // draw the image to the canvas
-        let imgData = ctx.getImageData(0, 0, this.imageWidth, this.imageHeight);
-
-        // split into RGBA values
-        let chunks = chunk(imgData.data, 4);
-
-        // round the RGB values to the nearest 5 units, to reduce the number of duplicate calculations to make.
-        this.roundedRGBA = chunks.map(d => this.roundRGBA(d));
-
-        // count the number of occurrences of RGBA values, to reduce to single values to compare.
-        let chunkCount = countBy(this.roundedRGBA);
-
-        // convert from an object to an array
-        this.chunks = Object.keys(chunkCount).map(key => ({
-          id: key,
-          count: chunkCount[key]
-        }));
-
-        // sort high to low
-        this.chunks.sort((a, b) => b.count - a.count);
-      }
     }
   }
 }
@@ -128,4 +208,7 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped lang="scss">
+td {
+    padding: 0.25rem 0.5rem;
+}
 </style>

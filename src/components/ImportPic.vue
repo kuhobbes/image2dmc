@@ -52,6 +52,9 @@
           <td>
             Percent of image
           </td>
+          <td>
+            Avg. score (lower is a closer match)
+          </td>
         </tr>
       </thead>
 
@@ -67,6 +70,9 @@
           </td>
           <td>
             {{color.pct}}
+          </td>
+          <td>
+            {{color.score}}
           </td>
         </tr>
       </tbody>
@@ -88,6 +94,7 @@ import sumBy from "lodash/sumBy";
 import countBy from "lodash/countBy";
 import groupBy from "lodash/groupBy";
 import * as _ from "lodash";
+import * as d3 from "d3-format";
 
 export default {
   name: 'ImportPic',
@@ -189,11 +196,13 @@ export default {
         const rgba = d.id.split(",")
         obj["color"] = chroma(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]/255})`);
         const closest = this.calcDist(obj.color);
+        console.log(closest)
         obj["hex"] = obj.color.hex();
         obj["pixel_count"] = d.count;
         obj["closest_hex"] = closest.hex;
         obj["closest_name"] = closest.name;
         obj["closest_dmc_id"] = closest.floss;
+        obj["closest_score"] = closest.dist;
         return obj;
       })
 
@@ -205,7 +214,8 @@ export default {
           dmc_name: values[0]["closest_name"],
           dmc_hex: values[0]["closest_hex"],
           count: sumBy(values, "pixel_count"),
-          pct: Math.round(sumBy(values, "pixel_count") / this.roundedRGBA.length * 1000) / 10 + "%"
+          score: d3.format("0.2f")(_.meanBy(values, "closest_score")),
+          pct: d3.format("0.1%")(sumBy(values, "pixel_count") / this.roundedRGBA.length)
         }))
         .value()
 
